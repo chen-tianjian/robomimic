@@ -10,6 +10,10 @@ echo "running tests for bcq..."
 python test_bcq.py
 echo "running tests for cql..."
 python test_cql.py
+echo "running tests for diffusion_policy..."
+python test_diffusion_policy.py
+echo "running tests for act..."
+python test_act.py
 echo "running tests for scripts..."
 python test_scripts.py
 echo "running tests for examples..."
