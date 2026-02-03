@@ -120,15 +120,19 @@ class ACT(BC_VAE):
         proprio = torch.cat(proprio, axis=1)
         qpos = proprio
 
-        images = []
-        for cam_name in self.camera_keys:
-            image = batch['obs'][cam_name]
-            image = self.normalize(image)
-            image = image.unsqueeze(axis=1)
-            images.append(image)
-        images = torch.cat(images, axis=1)
+        # Handle image observations (empty list when using low-dim only)
+        if self.camera_keys:
+            images = []
+            for cam_name in self.camera_keys:
+                image = batch['obs'][cam_name]
+                image = self.normalize(image)
+                image = image.unsqueeze(axis=1)
+                images.append(image)
+            images = torch.cat(images, axis=1)
+        else:
+            images = None  # No cameras - low-dim observations only
 
-        env_state = torch.zeros([qpos.shape[0], 10]).cuda()  # this is not used
+        env_state = torch.zeros([qpos.shape[0], 10], device=qpos.device)  # this is not used
 
         actions = batch['actions']
         is_pad = batch['obs']['pad_mask'] == 0  # from 1.0 or 0 to False and True
@@ -162,19 +166,59 @@ class ACT(BC_VAE):
         """
         assert not self.nets.training
 
-        proprio = [obs_dict[k] for k in self.proprio_keys]
-        proprio = torch.cat(proprio, axis=1)
+        # Handle proprioception - force shape (1, features) for inference
+        # Isaac Lab/robomimic may send tensors in various shapes - just reshape all to (1, -1)
+        proprio = []
+        for k in self.proprio_keys:
+            p = obs_dict[k]
+            # Force reshape to (1, features) regardless of input shape
+            p = p.reshape(1, -1)
+            proprio.append(p)
+        proprio = torch.cat(proprio, dim=1)
         qpos = proprio
 
-        images = []
-        for cam_name in self.camera_keys:
-            image = obs_dict[cam_name]
-            image = self.normalize(image)
-            image = image.unsqueeze(axis=1)
-            images.append(image)
-        images = torch.cat(images, axis=1)
+        # Handle images - ensure shape (1, C, H, W) before processing
+        # Then add camera dimension to match training format: (batch, num_cams, C, H, W)
+        if self.camera_keys:
+            images = []
+            for cam_name in self.camera_keys:
+                image = obs_dict[cam_name]
 
-        env_state = torch.zeros([qpos.shape[0], 10]).cuda() # not used
+                # Squeeze out any singleton dimensions first
+                while image.dim() > 4:
+                    image = image.squeeze(0)
+
+                # Now handle the remaining dimensions
+                if image.dim() == 3:
+                    # Could be (H, W, C) or (C, H, W)
+                    if image.shape[-1] == 3 or image.shape[-1] == 1:  # (H, W, C) format
+                        image = image.permute(2, 0, 1)  # -> (C, H, W)
+                    image = image.unsqueeze(0)  # -> (1, C, H, W)
+                elif image.dim() == 4:
+                    # Could be (1, H, W, C) or (1, C, H, W)
+                    if image.shape[-1] == 3 or image.shape[-1] == 1:  # (1, H, W, C)
+                        image = image.permute(0, 3, 1, 2)  # -> (1, C, H, W)
+                    # else already (1, C, H, W)
+                elif image.dim() == 2:
+                    # Grayscale (H, W)
+                    image = image.unsqueeze(0).unsqueeze(0)  # -> (1, 1, H, W)
+
+                # Ensure float and normalize to [0, 1] if needed
+                image = image.float()
+                if image.max() > 1.0:
+                    image = image / 255.0
+
+                # Apply ImageNet normalization (expects B, C, H, W)
+                image = self.normalize(image)
+                images.append(image)
+
+            # Stack along camera dimension: list of (1, C, H, W) -> (1, num_cams, C, H, W)
+            images = torch.stack(images, dim=1)
+        else:
+            images = None  # No cameras - low-dim observations only
+
+        # Create env_state on the same device as qpos (not hardcoded cuda)
+        env_state = torch.zeros([qpos.shape[0], 10], device=qpos.device)  # not used
 
         if self._step_counter % self.query_frequency == 0:
             a_hat, is_pad_hat, (mu, logvar) = self.nets["policy"](qpos, images, env_state)

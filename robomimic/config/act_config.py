@@ -36,6 +36,11 @@ class ACTConfig(BaseConfig):
         self.algo.loss.l1_weight = 1.0      # L1 loss weight
         self.algo.loss.cos_weight = 0.0     # cosine loss weight
 
+        # horizon parameters (for compatibility with Isaac Lab policy_utils.py)
+        self.algo.horizon.observation_horizon = 1  # ACT uses single frame (frame_stack=1)
+        self.algo.horizon.action_horizon = 10      # matches seq_length (chunk size)
+        self.algo.horizon.prediction_horizon = 10  # matches seq_length (chunk size)
+
         # ACT policy settings
         self.algo.act.hidden_dim = 512                              # length of (s, a) seqeunces to feed to transformer - should usually match train.frame_stack
         self.algo.act.dim_feedforward = 3200                        # dimension for embeddings used by transformer
