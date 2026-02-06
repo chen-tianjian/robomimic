@@ -72,7 +72,7 @@ Config → SequenceDataset (HDF5) → DataLoader → Algo (training/eval) → Mo
 **Model Composition**: Network modules in `robomimic/models/` implement `output_shape()` for automated shape propagation. Place sub-modules in `self.nets` (use ModuleDict for multiple).
 
 ### Directory Layout
-- `robomimic/algo/` - Algorithm implementations (BC, BCQ, CQL, TD3-BC, HBC, IRIS, IQL, Diffusion Policy)
+- `robomimic/algo/` - Algorithm implementations (BC, BCQ, CQL, TD3-BC, HBC, IRIS, IQL, Diffusion Policy, ACT)
 - `robomimic/config/` - Configuration classes with `base_config.py` as foundation
 - `robomimic/models/` - Neural network architectures (base_nets, obs_nets, policy_nets, etc.)
 - `robomimic/utils/` - Utilities (dataset.py for HDF5 loading, train_utils.py, obs_utils.py)
